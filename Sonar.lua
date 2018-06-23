@@ -11,6 +11,7 @@ if (sim_call_type==sim.syscb_init) then
     maxDetectionDist=1.5
     estadoDeOperacao="Segue a parede"
     turnTime=0
+    turnDirection=0
     detect={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
     --braitenbergL={-0.2,-0.4,-0.6,-0.8,-1,-1.2,-1.4,-1.6, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}
     --braitenbergR={-1.6,-1.4,-1.2,-1,-0.8,-0.6,-0.4,-0.2, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}
@@ -39,8 +40,13 @@ if (sim_call_type==sim.syscb_actuation) then
         --Msg=string.format("Dist8: %.4f ### Dist9: %.4f",detect[8],detect[9])
         --sim.addStatusbarMessage(Msg)
         
-        if(detect[8]>0.5) or (detect[9]>0.5) then
-            estadoDeOperacao="Volta para parede"
+        if (detect[8]>0.5) then
+            if (detect[9]==0) or (detect[16]==0) then
+                estadoDeOperacao="Faz a curva"
+            end
+            if (detect[9] > 0.5) then
+                estadoDeOperacao="Volta para parede"
+            end
         else
             turnTime=0
             if(detect[8]>detect[9])then
@@ -72,6 +78,16 @@ if (sim_call_type==sim.syscb_actuation) then
             end
         end
 
+    end
+
+    if (estadoDeOperacao=="Faz a curva") then
+        if(turnDirection==0)then
+            vLeft=v0
+            vright=v0
+        end
+        if(detect[9]>0)then
+            estadoDeOperacao="Segue a parede"
+        end
     end
     
     sim.setJointTargetVelocity(motorLeft,vLeft)
