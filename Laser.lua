@@ -51,6 +51,9 @@ if (sim_call_type==sim.syscb_sensing) then
     currentPillarFirstDetection=-1
     --Numero do ultimo feixe a detectar o pilar
     currentPillarLastDetection=-1
+    numberOfPillars=0
+    --Tabela que armazena as coordenadas X e Y de cada pilar
+    pillarCoordinates={}
 
     --Itera nos pontos de Laser emitidos
     for i=1,numberOfPoints+1,1 do
@@ -95,44 +98,42 @@ if (sim_call_type==sim.syscb_sensing) then
 
             --CONTINUA NO MESMO PILAR
             if(prevDist~=nil) then
-                Msg=string.format(">>>: X %.2f ; Y %.2f | Angle: %.2f - Dist: %.4f | PrevA: %.2f PrevD %.2f PrevX %.2f PrevY %.2f"
-                , pt[2], pt[3],angle,dist, prevAngle, prevDist, prevX, prevY)
+                --Msg=string.format(">>>: X %.2f ; Y %.2f | Angle: %.2f - Dist: %.4f | PrevA: %.2f PrevD %.2f PrevX %.2f PrevY %.2f"
+                --, pt[2], pt[3],angle,dist, prevAngle, prevDist, prevX, prevY)
                 --Atualiza a ultima detecao do pilar atualmente analisado
                 currentPillarLastDetection = i
 
             --DETECTOU UM NOVO PILAR
             else
+                numberOfPillars = numberOfPillars+1
                 currentPillarFirstDetection = i
             end
 
-            --Atualiza a ultima detecçao como a iteraçao atual
-            sim.addStatusbarMessage(Msg)
         --NAO detectou nada
         elseif result==0 then
-            if( i-1 == currentPillarLastDetection and
-                currentPillarFirstDetection > 0 and
-                currentPillarLastDetection > 0 and
-                currentPillarFirstDetection < currentPillarLastDetection) then
-                avgX, avgY = calculatePillarAvgCoord(points,currentPillarFirstDetection, currentPillarLastDetection)
-                Msg=string.format("<<>> AvgX:%.2f | AvgY:%.2f",avgX,avgY)
-                sim.addStatusbarMessage(Msg)
-            end
+            --Se estava detectando algo na ultima iteracao havia um pilar la
+            if( i-1 == currentPillarLastDetection and currentPillarFirstDetection > 0 and
+                currentPillarLastDetection > 0 and currentPillarFirstDetection < currentPillarLastDetection) then
 
+                avgX, avgY = calculatePillarAvgCoord(points,currentPillarFirstDetection, currentPillarLastDetection)
+                pillarCoordinates[numberOfPillars*2-1]=avgX
+                pillarCoordinates[numberOfPillars*2]=avgY
+                --Msg=string.format("<<>> AvgX:%.2f | AvgY:%.2f",avgX,avgY)
+                --sim.addStatusbarMessage(Msg)
+            end
         end
 
         sim.handleGraph(graphHandle,0.0)
     end
 
+    nextRotation = determineNextRoation(pillarCoordinates)
+    sim.addStatusbarMessage(string.format(">>NEXT ROTATION %f",nextRotation))
+    --sim.addStatusbarMessage("--------------------------------------------------")
 
-
-    TotPoints=table.getn(points)
-    --Msg=string.format("First: %.4f - %.4f - %.4f ### Last: %.4f - %.4f - %.4f",points[1],points[2],points[3],points[TotPoints-2],points[TotPoints-1],points[TotPoints])
-    sim.addStatusbarMessage("--------------------------------------------------")
-
-    -- Now send the data:
+    --[[ Now send the data:
     if #points>0 then
         sim.tubeWrite(communicationTube,sim.packFloatTable(points))
-    end
+    end--]]
 
     -- To read the data from another script, use following instructions (in that other script):
     --
@@ -168,4 +169,33 @@ function calculatePillarAvgCoord(points, startIndex, endIndex)
     end
 
     return sumX/(endIndex-startIndex), sumY/(endIndex-startIndex)
+end
+
+
+
+--[[
+Funçao que determina a proxima rotacao a ser feita no cruzamento baseado nas coordenadas
+relativas X e Y de cada um dos vetores detectados. Se diferente do que 3 pilares forem detectados
+Nenhuma rotacao eh realizada
+--]]
+function determineNextRoation(pillarCoordinates)
+    if table.getn(pillarCoordinates) ~= 6 then
+        --sim.addStatusbarMessage("FORWARD")
+        return MOVE_FORWARD
+    else
+        pillarsToTheRight=0
+        for i=1,3,1 do
+            if pillarCoordinates[2*i] < 0 then
+                pillarsToTheRight = pillarsToTheRight+1
+            end
+        end
+
+        if pillarsToTheRight == 2 then
+            --sim.addStatusbarMessage("LEFT")
+            return TURN_LEFT
+        elseif pillarsToTheRight==1 then
+            --sim.addStatusbarMessage("RIGHT")
+            return TURN_RIGHT
+        end
+    end
 end
