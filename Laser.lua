@@ -9,6 +9,8 @@ if (sim_call_type==sim.syscb_init) then
     TURN_LEFT=-1
     MOVE_FORWARD=0
     TURN_RIGHT=1
+
+    PILLAR_SEPARATION_THRESHOLD = 1
 end
 
 if (sim_call_type==sim.syscb_cleanup) then
@@ -96,12 +98,27 @@ if (sim_call_type==sim.syscb_sensing) then
 
             Msg=""
 
-            --CONTINUA NO MESMO PILAR
+
             if(prevDist~=nil) then
-                --Msg=string.format(">>>: X %.2f ; Y %.2f | Angle: %.2f - Dist: %.4f | PrevA: %.2f PrevD %.2f PrevX %.2f PrevY %.2f"
-                --, pt[2], pt[3],angle,dist, prevAngle, prevDist, prevX, prevY)
-                --Atualiza a ultima detecao do pilar atualmente analisado
-                currentPillarLastDetection = i
+                --A diferenca de distancia eh maior que o limiar -> esta detectado outro pilar
+                if math.abs(dist-prevDist) > PILLAR_SEPARATION_THRESHOLD then
+
+                    avgX, avgY = calculatePillarAvgCoord(points,currentPillarFirstDetection, currentPillarLastDetection)
+                    pillarCoordinates[numberOfPillars*2-1]=avgX
+                    pillarCoordinates[numberOfPillars*2]=avgY
+                    --Msg=string.format("<<>> AvgX:%.2f | AvgY:%.2f",avgX,avgY)
+                    --sim.addStatusbarMessage(Msg)
+
+                    currentPillarFirstDetection = i
+                    numberOfPillars = numberOfPillars+1
+                --Esta detectando o mesmo pilar
+                else
+                    --Atualiza a ultima detecao do pilar atualmente analisado
+                    currentPillarLastDetection = i
+                    --Msg=string.format(">>>: X %.2f ; Y %.2f | Angle: %.2f - Dist: %.4f | PrevA: %.2f PrevD %.2f PrevX %.2f PrevY %.2f", pt[2], pt[3],angle,dist, prevAngle, prevDist, prevX, prevY)
+                    --sim.addStatusbarMessage(Msg)
+                end
+
 
             --DETECTOU UM NOVO PILAR
             else
@@ -128,7 +145,7 @@ if (sim_call_type==sim.syscb_sensing) then
 
     nextRotation = determineNextRoation(pillarCoordinates)
     sim.addStatusbarMessage(string.format(">>NEXT ROTATION %f",nextRotation))
-    --sim.addStatusbarMessage("--------------------------------------------------")
+    sim.addStatusbarMessage("--------------------------------------------------")
 
     --[[ Now send the data:
     if #points>0 then
@@ -163,12 +180,14 @@ PARAM: endIndex -> indice de fim para o calculo da media
 function calculatePillarAvgCoord(points, startIndex, endIndex)
     sumX=0
     sumY=0
-    for i=startIndex, endIndex, 1 do
+    --[[for i=startIndex, endIndex, 1 do
         sumX = sumX + points[i*4-1]
         sumY = sumY + points[i*4]
     end
 
-    return sumX/(endIndex-startIndex), sumY/(endIndex-startIndex)
+    return sumX/(endIndex-startIndex), sumY/(endIndex-startIndex)--]]
+    return (points[endIndex*4-1]+points[startIndex*4-1])/2, (points[endIndex*4]+points[startIndex*4])/2
+
 end
 
 
