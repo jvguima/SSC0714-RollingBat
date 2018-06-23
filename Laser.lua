@@ -5,6 +5,10 @@ if (sim_call_type==sim.syscb_init) then
     modelHandle=sim.getObjectAssociatedWithScript(sim.handle_self)
     objName=sim.getObjectName(modelHandle)
     communicationTube=sim.tubeOpen(0,objName..'_2D_SCANNER_DATA',1)
+
+    TURN_LEFT=-1
+    MOVE_FORWARD=0
+    TURN_RIGHT=1
 end
 
 if (sim_call_type==sim.syscb_cleanup) then
@@ -43,9 +47,12 @@ if (sim_call_type==sim.syscb_sensing) then
     points={}
     modelInverseMatrix=simGetInvertedMatrix(sim.getObjectMatrix(modelHandle,-1))
 
-    PilarsDetected=0;
+    --Numedo do primeiro feixe a detectar o pilar atual
+    currentPillarFirstDetection=-1
+    --Numero do ultimo feixe a detectar o pilar
+    currentPillarLastDetection=-1
 
-    --Itera nos pontos de Laser encontrados
+    --Itera nos pontos de Laser emitidos
     for i=1,numberOfPoints+1,1 do
 
         sim.setJointPosition(jointHandle,p)
@@ -55,7 +62,7 @@ if (sim_call_type==sim.syscb_sensing) then
         angle = p*180/3.1415935;
 
 
-        --Laser Detectou algo
+        --LASER DETECTOU ALGO
         if result>0 then
 
             -- We put the RELATIVE coordinate of that point into the table that we will return:
@@ -65,31 +72,54 @@ if (sim_call_type==sim.syscb_sensing) then
 
 
             --[[
-            Se i>0 e se i-1 detectou algo
-                Ve a diferenca de distancia relativa entre ambos
+            Pega a distancia e angulo do feixe anterior
+            Se o feixe anterior (i-1) nao detectou nada, tentar acessar a posicao (i-1)
+            na table points resultara em NULO -> Isso e o indicativo de que houve um gap entre
+            os pilares
              --]]
             if i>0 then
-                prevAngle = points [(i-1)*2-1]
-                prevDist = points [(i-1)*2]
+                prevAngle = points [(i-1)*4-3]
+                prevDist = points [(i-1)*4-2]
+                prevX = points[(i-1)*4-1]
+                prevY = points[(i-1)*4]
             end
 
+            --Insere as informacoes do feixe atual
+            table.insert(points,i*4-3,angle)    --Angulo
+            table.insert(points,i*4-2,dist)     --Distancia
+            table.insert(points,i*4-1,pt[2])    --X
+            table.insert(points,i*4,pt[3])      --Y
 
-            table.insert(points,i*2-1,angle)
-            table.insert(points,i*2,dist)
-
-
-            --[[table.insert(points,pt[1])
-            table.insert(points,pt[2])
-            table.insert(points,pt[3])--]]
 
             Msg=""
-            if(prevDist~=nil and prevAngle~=nil) then
-                Msg=string.format(">>>: %.2f ; %.2f ; %.2f | Angle: %.2f - Dist: %.4f | PrevA: %.2f PrevD %.2f",pt[1], pt[2], pt[3],angle,dist, prevAngle, prevDist)
+
+            --CONTINUA NO MESMO PILAR
+            if(prevDist~=nil) then
+                Msg=string.format(">>>: X %.2f ; Y %.2f | Angle: %.2f - Dist: %.4f | PrevA: %.2f PrevD %.2f PrevX %.2f PrevY %.2f"
+                , pt[2], pt[3],angle,dist, prevAngle, prevDist, prevX, prevY)
+                --Atualiza a ultima detecao do pilar atualmente analisado
+                currentPillarLastDetection = i
+
+            --DETECTOU UM NOVO PILAR
             else
-                Msg=string.format(">>>: %.2f ; %.2f ; %.2f | Angle: %.2f - Dist: %.4f",pt[1], pt[2], pt[3],angle,dist)
+                currentPillarFirstDetection = i
             end
+
+            --Atualiza a ultima detecçao como a iteraçao atual
             sim.addStatusbarMessage(Msg)
+        --NAO detectou nada
+        elseif result==0 then
+            if( i-1 == currentPillarLastDetection and
+                currentPillarFirstDetection > 0 and
+                currentPillarLastDetection > 0 and
+                currentPillarFirstDetection < currentPillarLastDetection) then
+                avgX, avgY = calculatePillarAvgCoord(points,currentPillarFirstDetection, currentPillarLastDetection)
+                Msg=string.format("<<>> AvgX:%.2f | AvgY:%.2f",avgX,avgY)
+                sim.addStatusbarMessage(Msg)
+            end
+
         end
+
         sim.handleGraph(graphHandle,0.0)
     end
 
@@ -118,4 +148,24 @@ if (sim_call_type==sim.syscb_sensing) then
     -- end
     --
     -- laserDetectedPoints is RELATIVE to the model base!
+end
+
+
+
+--[[
+Funçao que calcula a posicao media de um pilar iterando pelos X e Y relativos
+dos feixes que o detectaram.
+PARAM: points -> tabela de pontos que contem para cada feixe o angulo, distancia, relX e relY
+PARAM: startIndex -> indice de inicio para o calculo da media
+PARAM: endIndex -> indice de fim para o calculo da media
+--]]
+function calculatePillarAvgCoord(points, startIndex, endIndex)
+    sumX=0
+    sumY=0
+    for i=startIndex, endIndex, 1 do
+        sumX = sumX + points[i*4-1]
+        sumY = sumY + points[i*4]
+    end
+
+    return sumX/(endIndex-startIndex), sumY/(endIndex-startIndex)
 end
