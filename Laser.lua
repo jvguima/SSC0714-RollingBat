@@ -3,14 +3,14 @@ if (sim_call_type==sim.syscb_init) then
     jointHandle=sim.getObjectHandle("LaserScannerJoint_2D")
     graphHandle=sim.getObjectHandle("LaserScannerGraph_2D")
     modelHandle=sim.getObjectAssociatedWithScript(sim.handle_self)
-    objName=sim.getObjectName(modelHandle)
-    communicationTube=sim.tubeOpen(0,objName..'_2D_SCANNER_DATA',1)
+    --objName=sim.getObjectName(modelHandle)
+    --communicationTube=sim.tubeOpen(0,objName..'_2D_SCANNER_DATA',1)
+    communicationTube=sim.tubeOpen(0,'NEXT_ROTATION',1)
 
     TURN_LEFT=-1
     MOVE_FORWARD=0
     TURN_RIGHT=1
 
-    PILLAR_SEPARATION_THRESHOLD = 1
 end
 
 if (sim_call_type==sim.syscb_cleanup) then
@@ -18,6 +18,8 @@ if (sim_call_type==sim.syscb_cleanup) then
 end
 
 if (sim_call_type==sim.syscb_sensing) then
+
+    -- PEGA VARIAVEIS DE PARAMETROS =========================================================
     scanningAngle=tonumber(sim.getScriptSimulationParameter(sim.handle_self,"scanningAngle"))
     if (scanningAngle==nil) then
         scanningAngle=180
@@ -29,6 +31,7 @@ if (sim_call_type==sim.syscb_sensing) then
     if (scanningAngle>180) then
         scanningAngle=180
     end
+
     scanningDensity=tonumber(sim.getScriptSimulationParameter(sim.handle_self,"scanningDensity"))
     if (scanningDensity==nil) then
         scanningDensity=2
@@ -41,8 +44,14 @@ if (sim_call_type==sim.syscb_sensing) then
         scanningDensity=5
     end
 
+    PILLAR_SEPARATION_THRESHOLD = tonumber(sim.getScriptSimulationParameter(sim.handle_self,"pillarSeparationThreshold"))
+    if (PILLAR_SEPARATION_THRESHOLD==nil) then
+        PILLAR_SEPARATION_THRESHOLD=1
+        sim.setScriptSimulationParameter(sim.handle_self,"pillarSeparationThreshold",PILLAR_SEPARATION_THRESHOLD)
+    end
 
     sim.resetGraph(graphHandle)
+
     numberOfPoints=scanningAngle*scanningDensity+1
     p=-scanningAngle*math.pi/360
     stepSize=math.pi/(scanningDensity*180)
@@ -57,6 +66,8 @@ if (sim_call_type==sim.syscb_sensing) then
     --Tabela que armazena as coordenadas X e Y de cada pilar
     pillarCoordinates={}
 
+    --======================================================================================
+
     --Itera nos pontos de Laser emitidos
     for i=1,numberOfPoints+1,1 do
 
@@ -65,7 +76,6 @@ if (sim_call_type==sim.syscb_sensing) then
         --pt é: table of 3 numbers indicating the relative coordinates of the detected point if result is
         result,dist,pt=sim.handleProximitySensor(laserHandle) -- pt is RELATIVE to te rotating laser beam!
         angle = p*180/3.1415935;
-
 
         --LASER DETECTOU ALGO
         if result>0 then
@@ -144,7 +154,10 @@ if (sim_call_type==sim.syscb_sensing) then
     end
 
     nextRotation = determineNextRoation(pillarCoordinates)
-    sim.addStatusbarMessage(string.format(">>NEXT ROTATION %f",nextRotation))
+    if(nextRotation~=nil)then
+        sim.addStatusbarMessage(string.format(">>NEXT ROTATION %f",nextRotation))
+        sim.tubeWrite(communicationTube, nextRotation, 1)
+    end
     sim.addStatusbarMessage("--------------------------------------------------")
 
     --[[ Now send the data:
@@ -176,6 +189,8 @@ dos feixes que o detectaram.
 PARAM: points -> tabela de pontos que contem para cada feixe o angulo, distancia, relX e relY
 PARAM: startIndex -> indice de inicio para o calculo da media
 PARAM: endIndex -> indice de fim para o calculo da media
+
+RETURN: Coordenadas medias X e Y
 --]]
 function calculatePillarAvgCoord(points, startIndex, endIndex)
     sumX=0
@@ -196,6 +211,10 @@ end
 Funçao que determina a proxima rotacao a ser feita no cruzamento baseado nas coordenadas
 relativas X e Y de cada um dos vetores detectados. Se diferente do que 3 pilares forem detectados
 Nenhuma rotacao eh realizada
+
+PARAM: pillarCoordinates -> Table de tamanho 3*2, que armazena as coordenadas X e Y de cada um dos 3 pilares
+
+RETURN: inteiro contendo o codigo para o proximo movimento
 --]]
 function determineNextRoation(pillarCoordinates)
     if table.getn(pillarCoordinates) ~= 6 then
