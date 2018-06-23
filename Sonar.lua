@@ -7,6 +7,9 @@ if (sim_call_type==sim.syscb_init) then
     end
     motorLeft=sim.getObjectHandle("Pioneer_p3dx_leftMotor")
     motorRight=sim.getObjectHandle("Pioneer_p3dx_rightMotor")
+    laserScannerHandle=sim.getObjectHandle("LaserScanner_2D")
+    laserScannerObjectName=sim.getObjectName(laserScannerHandle) -- is not necessarily "LaserScanner_2D"!!!
+    communicationTube=sim.tubeOpen(0,'NEXT_ROTATION',1)
     noDetectionDist=1.45
     estadoDeOperacao="Segue a parede"
     turnTime=0
@@ -31,8 +34,12 @@ if (sim_call_type==sim.syscb_actuation) then
             detect[i]=0
         end
     end
+    buffer=sim.tubeRead(communicationTube)
+    if (buffer~=nil) and (detect[7]>0) then
+        turnDirection= tonumber(buffer)
+    end
 
-    Msg=string.format("Dist8: %.4f ### Dist9: %.4f",detect[8],detect[9])
+    Msg=string.format("Dist8: %.4f ### Dist9: %.4f Turn: %d",detect[8],detect[9],turnDirection)
     sim.addStatusbarMessage(Msg .. estadoDeOperacao)
     
 
@@ -40,13 +47,6 @@ if (sim_call_type==sim.syscb_actuation) then
     
         vLeft=v0
         vRight=v0
-  
-        Msg=string.format("Dist8: %.4f ### Dist9: %.4f",detect[8],detect[9])
-        sim.addStatusbarMessage(Msg)
-        
-        if (detect[9]==0) or (detect[16]==0) then
-            estadoDeOperacao="Faz a curva"
-        end
         
         if (detect[8]>0.5) and (detect[9]>0.5) then
             estadoDeOperacao="Volta para parede"
@@ -56,6 +56,9 @@ if (sim_call_type==sim.syscb_actuation) then
             vRight=vRight-0.2
         elseif (detect[8]<detect[9]) then
             vLeft=vLeft-0.2
+        end
+        if (detect[9]==0) or (detect[16]==0) then
+            estadoDeOperacao="Faz a curva"
         end
         
     end
@@ -98,7 +101,7 @@ if (sim_call_type==sim.syscb_actuation) then
         elseif (turnDirection==-1) then
             vLeft=2.8
             vRight=3.4
-            if (detect[9]>0) and (detect[9]<0.5) then
+            if (detect[9]>0) then
                estadoDeOperacao="Segue a parede"
             end
         end
