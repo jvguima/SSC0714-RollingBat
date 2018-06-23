@@ -7,11 +7,10 @@ if (sim_call_type==sim.syscb_init) then
     end
     motorLeft=sim.getObjectHandle("Pioneer_p3dx_leftMotor")
     motorRight=sim.getObjectHandle("Pioneer_p3dx_rightMotor")
-    noDetectionDist=1.6
-    maxDetectionDist=1.5
+    noDetectionDist=1.45
     estadoDeOperacao="Segue a parede"
     turnTime=0
-    turnDirection=0
+    turnDirection=1
     detect={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
     --braitenbergL={-0.2,-0.4,-0.6,-0.8,-1,-1.2,-1.4,-1.6, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}
     --braitenbergR={-1.6,-1.4,-1.2,-1,-0.8,-0.6,-0.4,-0.2, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}
@@ -32,6 +31,8 @@ if (sim_call_type==sim.syscb_actuation) then
         end
     end
 
+    sim.addStatusbarMessage(estadoDeOperacao)
+
     if (estadoDeOperacao=="Segue a parede") then
     
         vLeft=v0
@@ -40,22 +41,21 @@ if (sim_call_type==sim.syscb_actuation) then
         --Msg=string.format("Dist8: %.4f ### Dist9: %.4f",detect[8],detect[9])
         --sim.addStatusbarMessage(Msg)
         
-        if (detect[8]>0.5) then
-            if (detect[9]==0) or (detect[16]==0) then
-                estadoDeOperacao="Faz a curva"
-            end
-            if (detect[9] > 0.5) then
-                estadoDeOperacao="Volta para parede"
-            end
-        else
-            turnTime=0
-            if(detect[8]>detect[9])then
-                vRight=vRight-0.2
-            else if (detect[8]<detect[9]) then
-                vLeft=vLeft-0.2
-            end
-            end
+        if (detect[9]==0) or (detect[16]==0) then
+            estadoDeOperacao="Faz a curva"
         end
+        
+        if (detect[8]>0.5) and (detect[9]>0.5) then
+            estadoDeOperacao="Volta para parede"
+        end
+       
+        if(detect[8]>detect[9])then
+            vRight=vRight-0.2
+        else if (detect[8]<detect[9]) then
+            vLeft=vLeft-0.2
+        end
+        end
+        
     end
 
     if (estadoDeOperacao=="Volta para parede") then
@@ -81,11 +81,19 @@ if (sim_call_type==sim.syscb_actuation) then
     end
 
     if (estadoDeOperacao=="Faz a curva") then
-        if(turnDirection==0)then
+        if (turnDirection==0) then
             vLeft=v0
             vright=v0
         end
+        if (turnDirection==1) then
+            vLeft=3.4
+            vRight=1.4
+        end
         if(detect[9]>0)then
+            while turnTime < 200 do
+                turnTime=turnTime+1
+            end
+            turnTime=0
             estadoDeOperacao="Segue a parede"
         end
     end
