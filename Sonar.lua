@@ -1,6 +1,6 @@
 -- This is a very simple EXAMPLE navigation program, which avoids obstacles using the Braitenberg algorithm
 
-if (sim_call_type==sim.syscb_init) then
+if (sim_call_type==sim.syscb_init) then 
     usensors={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}
     for i=1,16,1 do
         usensors[i]=sim.getObjectHandle("Pioneer_p3dx_ultrasonicSensor"..i)
@@ -17,29 +17,33 @@ if (sim_call_type==sim.syscb_init) then
     detect={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
     v0=2
     minDist=0.5
-
+    
     --Braitenberg variables
     braitenbergDetect={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
     braitenbergL={-0.2,-0.4,-0.6,-0.8,-1,-1.2,-1.4,-1.6, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}
-    braitenbergR={-1.6,-1.4,-1.2,-0.8,-0.6,-0.4,-0.4,-0.2, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}
+    braitenbergR={-1.6,-1.4,-1.2,-1,-0.8,-0.6,-0.4,-0.2, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}
 
-    maxDetectionDist=0.7
-    braitenbergNoDetectionDist = 0.8
+    maxDetectionDist=0.4
+    braitenbergNoDetectionDist = 0.55
 
-    sensorObstacleThreshold = 0.4
+    sensorObstacleThreshold = 0.5
 
-end
+end 
 
-if (sim_call_type==sim.syscb_cleanup) then
+if (sim_call_type==sim.syscb_cleanup) then 
+ 
+end 
 
-end
-
-if (sim_call_type==sim.syscb_actuation) then
+if (sim_call_type==sim.syscb_actuation) then 
     for i=1,16,1 do
         res,dist=sim.readProximitySensor(usensors[i])
         if (res>0) and (dist<noDetectionDist) then
             detect[i]=dist
-            braitenbergDetect[i]=1-((dist-maxDetectionDist)/(braitenbergNoDetectionDist-maxDetectionDist))
+            if (res>0) and (dist<=sensorObstacleThreshold) then
+                braitenbergDetect[i]=1-((dist-maxDetectionDist)/(braitenbergNoDetectionDist-maxDetectionDist))
+            else
+                braitenbergDetect[i]=0
+            end
         else
             detect[i]=0
             braitenbergDetect[i]=0
@@ -50,24 +54,24 @@ if (sim_call_type==sim.syscb_actuation) then
         turnDirection= tonumber(buffer)
     end
 
-    Msg=string.format("Dist8: %.4f ### Dist9: %.4f Turn: %d",detect[8],detect[9],turnDirection)
+    Msg=string.format("Dist4: %.4f Dist8: %.4f ### Dist9: %.4f Turn: %d",detect[5],detect[6],detect[9],turnDirection)
     sim.addStatusbarMessage(Msg .. estadoDeOperacao)
-
+    
     --SEGUE PAREDE======================================================================
     if (estadoDeOperacao=="Segue a parede") then
-
+    
         vLeft=v0
         vRight=v0
-
+        
         --OBSTACULO DETECTADO
-        if(detect[4]<=sensorObstacleThreshold and detect[5]<=sensorObstacleThreshold) then
+        if(detect[4]<=sensorObstacleThreshold and detect[5]<=sensorObstacleThreshold) then 
             estadoDeOperacao="Evita obstaculo"
         end
 
         if (detect[8]>0.5) and (detect[9]>0.5) then
             estadoDeOperacao="Volta para parede"
         end
-
+       
         if(detect[8]>detect[9])then
             vRight=vRight-0.2
         elseif (detect[8]<detect[9]) then
@@ -76,15 +80,15 @@ if (sim_call_type==sim.syscb_actuation) then
         if (detect[9]==0) or (detect[16]==0) then
             estadoDeOperacao="Faz a curva"
         end
-
+        
     end
-
+    
     --VOLTA A PAREDE======================================================================
     if (estadoDeOperacao=="Volta para parede") then
-
+    
         vLeft=v0
         vRight=0
-
+  
         if (turnTime<55) then
             turnTime=turnTime+1
         else
@@ -101,7 +105,7 @@ if (sim_call_type==sim.syscb_actuation) then
         end
 
     end
-
+    
     --CURVA======================================================================
     if (estadoDeOperacao=="Faz a curva") then
         --Reto
@@ -127,21 +131,28 @@ if (sim_call_type==sim.syscb_actuation) then
             end
         end
     end
-
+    
     --EVITA OBSTACULOS======================================================================
     if (estadoDeOperacao=="Evita obstaculo") then
 
-        if(detect[4]==0 and detect[5]==0) then
-
+        vLeft=v0
+        vRight=v0
+        
+        if(detect[5]==0 and detect[6]==0) then 
+            for i=1,6,1 do
+                vLeft=vLeft+braitenbergL[i]*braitenbergDetect[i]
+                vRight=vRight+10*braitenbergR[i]*braitenbergDetect[i]
+            end
+        elseif(detect[4]==0 and detect[5]==0 and detect[8]>0.3) then
             estadoDeOperacao="Segue a parede"
         else
-            for i=3,6,1 do
-                vLeft=vLeft+braitenbergL[i]*braitenbergDetect[i]
+            for i=1,6,1 do
+                vLeft=vLeft+2*braitenbergL[i]*braitenbergDetect[i]
                 vRight=vRight+braitenbergR[i]*braitenbergDetect[i]
             end
         end
     end
-
+    
     sim.setJointTargetVelocity(motorLeft,vLeft)
     sim.setJointTargetVelocity(motorRight,vRight)
 end 
