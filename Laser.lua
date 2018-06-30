@@ -49,6 +49,12 @@ if (sim_call_type==sim.syscb_sensing) then
         PILLAR_SEPARATION_THRESHOLD=1
         sim.setScriptSimulationParameter(sim.handle_self,"pillarSeparationThreshold",PILLAR_SEPARATION_THRESHOLD)
     end
+    --Alcance maximo do laser
+    LASER_MAX_RANGE = tonumber(sim.getScriptSimulationParameter(sim.handle_self,"laserMaxRange"))
+    if (LASER_MAX_RANGE==nil) then
+        LASER_MAX_RANGE=3
+        sim.setScriptSimulationParameter(sim.handle_self,"laserMaxRange",PILLAR_SEPARATION_THRESHOLD)
+    end
 
     sim.resetGraph(graphHandle)
 
@@ -76,6 +82,10 @@ if (sim_call_type==sim.syscb_sensing) then
         --pt é: table of 3 numbers indicating the relative coordinates of the detected point if result is
         result,dist,pt=sim.handleProximitySensor(laserHandle) -- pt is RELATIVE to te rotating laser beam!
         angle = p*180/3.1415935;
+
+        if(result >0 and dist > LASER_MAX_RANGE) then
+            result = 0
+        end
 
         --LASER DETECTOU ALGO
         if result>0 then
@@ -155,7 +165,7 @@ if (sim_call_type==sim.syscb_sensing) then
 
     nextRotation = determineNextRoation(pillarCoordinates)
     if(nextRotation~=nil)then
-        sim.addStatusbarMessage(string.format(">>NEXT ROTATION %f",nextRotation))
+        sim.addStatusbarMessage(Msg .. string.format(">>NEXT ROTATION %f",nextRotation))
         sim.tubeWrite(communicationTube, nextRotation, 1)
     end
     sim.addStatusbarMessage("--------------------------------------------------")
