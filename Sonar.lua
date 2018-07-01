@@ -17,6 +17,7 @@ if (sim_call_type==sim.syscb_init) then
     detect={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
     v0=2
     minDist=0.5
+        state=0
     
     --Braitenberg variables
     braitenbergDetect={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
@@ -50,11 +51,11 @@ if (sim_call_type==sim.syscb_actuation) then
         end
     end
     buffer=sim.tubeRead(communicationTube)
-    if (buffer~=nil) and (detect[7]>0) then
+    if (buffer~=nil) and (detect[7]>0) and (detect[7]<0.5) and (estadoDeOperacao~="Faz a curva") then
         turnDirection= tonumber(buffer)
     end
 
-    Msg=string.format("Dist4: %.4f Dist8: %.4f ### Dist9: %.4f Turn: %d",detect[5],detect[6],detect[9],turnDirection)
+    Msg=string.format("Dist7: %.4f Dist10: %.4f ### Dist9: %.4f Turn: %d state: %d \n",detect[7],detect[10],detect[9],turnDirection, state)
     sim.addStatusbarMessage(Msg .. estadoDeOperacao)
     
     --SEGUE PAREDE======================================================================
@@ -64,20 +65,20 @@ if (sim_call_type==sim.syscb_actuation) then
         vRight=v0
         
         --OBSTACULO DETECTADO
-        if(detect[4]<=sensorObstacleThreshold and detect[5]<=sensorObstacleThreshold) then 
+        if(detect[4]>0 and detect[4]<=sensorObstacleThreshold and detect[5]>0 and detect[5]<=sensorObstacleThreshold) then 
             estadoDeOperacao="Evita obstaculo"
         end
-
         if (detect[8]>0.5) and (detect[9]>0.5) then
+            state=0
             estadoDeOperacao="Volta para parede"
         end
        
         if(detect[8]>detect[9])then
-            vRight=vRight-0.2
+            vRight=vRight-0.35
         elseif (detect[8]<detect[9]) then
-            vLeft=vLeft-0.2
+            vLeft=vLeft-0.35
         end
-        if (detect[9]==0) or (detect[16]==0) then
+        if (detect[8]==0) or (detect[1]==0) then
             estadoDeOperacao="Faz a curva"
         end
         
@@ -85,19 +86,15 @@ if (sim_call_type==sim.syscb_actuation) then
     
     --VOLTA A PAREDE======================================================================
     if (estadoDeOperacao=="Volta para parede") then
-    
         vLeft=v0
         vRight=0
   
-        if (turnTime<55) then
-            turnTime=turnTime+1
-        else
+        if(detect[4]~=0 and detect[5]~=0 or state==1) then
+            state=1
             vRight=v0
             if(detect[4]<minDist) or (detect[5]<minDist) or (detect[6]<minDist) or (detect[7]<minDist) then
                 vLeft=0
-                if(turnTime<110) then
-                    turnTime=turnTime+1
-                else
+                if(detect[9]-detect[8]<0.1 and detect[8]<minDist) then
                     turnTime=0
                     estadoDeOperacao="Segue a parede"
                 end
@@ -108,28 +105,42 @@ if (sim_call_type==sim.syscb_actuation) then
     
     --CURVA======================================================================
     if (estadoDeOperacao=="Faz a curva") then
-        --Reto
-        if (turnDirection==0) then
-            vLeft=v0
-            vright=v0
-            if (detect[9]>0) then
-                estadoDeOperacao="Segue a parede"
+        --if(detect[9]==0) then
+            if(detect[4]>0 and detect[4]<=sensorObstacleThreshold and detect[5]>0 and detect[5]<=sensorObstacleThreshold) then 
+                estadoDeOperacao="Evita obstaculo"
             end
-        --Direita
-        elseif (turnDirection==1) then
-            vLeft=3.4
-            vRight=2.0
-            if (detect[16]>0) then
-                estadoDeOperacao="Segue a parede"
+            
+            --Reto
+            if (turnDirection==0) then
+                vLeft=v0
+                vright=v0
+                if (detect[9]>0) then
+                    estadoDeOperacao="Segue a parede"
+                end
             end
-        --Esquerda
-        elseif (turnDirection==-1) then
-            vLeft=2.2
-            vRight=2.8
-            if (detect[9]>0 and detect[9]<0.5) then
-               estadoDeOperacao="Segue a parede"
+            --Direita
+            if (turnDirection==1) then
+                vLeft=2.1
+                vRight=1.0
+           
+                if (detect[7]~=0.0) and (detect[7]<=0.45 ) then
+                    vRight=0
+                    vLeft=0
+                    estadoDeOperacao="Segue a parede"
+                    if (detect[8]>0)then
+                        estadoDeOperacao="Segue a parede"
+                    end
+                end
             end
-        end
+            --Esquerda
+            if (turnDirection==-1) then
+                vLeft=2.2
+                vRight=2.9
+                if (detect[9]>0 and detect[9]<0.5) then
+                   estadoDeOperacao="Segue a parede"
+                end
+            end
+        --end
     end
     
     --EVITA OBSTACULOS======================================================================
@@ -143,7 +154,7 @@ if (sim_call_type==sim.syscb_actuation) then
                 vLeft=vLeft+braitenbergL[i]*braitenbergDetect[i]
                 vRight=vRight+10*braitenbergR[i]*braitenbergDetect[i]
             end
-        elseif(detect[4]==0 and detect[5]==0 and detect[8]>0.3) then
+        elseif(detect[4]==0 and detect[5]==0 and (detect[10]>0.6)) then
             estadoDeOperacao="Segue a parede"
         else
             for i=1,6,1 do
